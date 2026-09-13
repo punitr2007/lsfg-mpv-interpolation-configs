@@ -1,0 +1,288 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# lsfg — Lossless Scaling Frame Generation Launcher Wrapper for mpv & Linux
+# ==============================================================================
+#
+# Description:
+#   Launches mpv (or any custom command) with Lossless Scaling Frame Generation (lsfg-vk v1)
+#   seamlessly on Linux (Arch Linux / Wayland & X11 / NVIDIA & AMD).
+#
+# Usage:
+#   lsfg [options] <command> [args...]
+#   lsfg [options] mpv /path/to/video.mkv
+#   lsfg [options] yt "https://youtube.com/watch?v=..."
+#
+# Options:
+#   -m, --multiplier X    Set FPS multiplier (2, 3, 4) [default: 3]
+#   -f, --flow-scale X    Set optical flow scale (0.5, 0.75, 1.0) [default: 1.0]
+#   -p, --performance     Toggle performance mode (reduces GPU load)
+#   -h, --hdr             Toggle HDR mode
+#   --dll PATH            Override path to Lossless.dll
+#   --help                Show this help message
+#
+# ==============================================================================
+
+set -euo pipefail
+
+# ── Paths & Locations ──────────────────────────────────────────────────────────
+CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/lsfg-vk"
+CONFIG_FILE="${CONFIG_DIR}/conf.toml"
+DATA_DIR="${XDG_DATA_HOME:-$HOME/.local/share}"
+LIB_DIR="${HOME}/.local/lib"
+V1_LIB="${LIB_DIR}/liblsfg-vk.so"
+V1_LAYER_JSON="${DATA_DIR}/vulkan/implicit_layer.d/VkLayer_LS_frame_generation.json"
+
+# Common Steam library locations for Lossless.dll
+STEAM_PATHS=(
+    "${HOME}/.local/share/Steam/steamapps/common/Lossless Scaling/Lossless.dll"
+    "${HOME}/.steam/steam/steamapps/common/Lossless Scaling/Lossless.dll"
+    "${HOME}/.steam/root/steamapps/common/Lossless Scaling/Lossless.dll"
+    "/mnt/storage/SteamLibrary/steamapps/common/Lossless Scaling/Lossless.dll"
+    "${HOME}/Local_Codebase/Projects/Lossless Scaling/Lossless.dll"
+)
+
+# ── Ensure Layer Files Exist ──────────────────────────────────────────────────
+mkdir -p "${LIB_DIR}" "${DATA_DIR}/vulkan/implicit_layer.d" "${CONFIG_DIR}"
+
+# Check for v1 library
+if [[ ! -f "${V1_LIB}" ]]; then
+    # Search system lib locations if ~/.local/lib doesn't have it
+    if [[ -f "/usr/local/lib/liblsfg-vk.so" ]]; then
+        V1_LIB="/usr/local/lib/liblsfg-vk.so"
+    elif [[ -f "/usr/lib/liblsfg-vk.so" ]]; then
+        V1_LIB="/usr/lib/liblsfg-vk.so"
+    else
+        echo -e "\033[1;31m[lsfg] ERROR: liblsfg-vk.so not found at ${V1_LIB}\033[0m"
+        echo -e "Please run the ./install.sh script or place liblsfg-vk.so in ~/.local/lib/"
+        exit 1
+    fi
+fi
+
+# Ensure v1 implicit layer manifest points to the correct library path
+cat > "${V1_LAYER_JSON}" << EOF
+{
+  "file_format_version": "1.0.0",
+  "layer": {
+    "name": "VK_LAYER_LS_frame_generation",
+    "type": "GLOBAL",
+    "api_version": "1.4.313",
+    "library_path": "${V1_LIB}",
+    "implementation_version": "1",
+    "description": "Lossless Scaling frame generation layer",
+    "functions": {
+      "vkGetInstanceProcAddr": "layer_vkGetInstanceProcAddr",
+      "vkGetDeviceProcAddr": "layer_vkGetDeviceProcAddr"
+    },
+    "disable_environment": {
+      "DISABLE_LSFG": "1"
+    }
+  }
+}
+EOF
+
+# ── Locate Lossless.dll ───────────────────────────────────────────────────────
+LOSSLESS_DLL=""
+for p in "${STEAM_PATHS[@]}"; do
+    if [[ -f "$p" ]]; then
+        LOSSLESS_DLL="$p"
+        break
+    fi
+done
+
+# ── Ensure Default conf.toml (v1 Format) ──────────────────────────────────────
+if [[ ! -f "${CONFIG_FILE}" ]] || ! grep -q "^version = 1" "${CONFIG_FILE}" 2>/dev/null; then
+    cat << TOML > "${CONFIG_FILE}"
+version = 1
+
+[global]
+dll = "${LOSSLESS_DLL}"
+
+[[game]]
+exe = "mpv"
+
+multiplier = 3
+flow_scale = 1.0
+performance_mode = false
+hdr_mode = false
+TOML
+fi
+
+# ── State Tracking & Parsing ──────────────────────────────────────────────────
+FLOW_SET=0
+PERF_SET=0
+MULTIPLIER="3"
+FLOW_SCALE="1.0"
+PERF_MODE="false"
+HDR_MODE="false"
+
+# Helper: Update field in the [[game]] exe="mpv" block in conf.toml
+update_game_field() {
+    local field="$1" value="$2"
+    awk -v field="$field" -v value="$value" '
+        /^\[\[game\]\]/ { in_block=0; in_mpv=0 }
+        in_block && /^exe/ && /mpv/ { in_mpv=1 }
+        in_mpv && $0 ~ "^" field " *=" {
+            sub(/=.*/, "= " value)
+        }
+        /^\[\[game\]\]/ { in_block=1 }
+        { print }
+    ' "${CONFIG_FILE}" > /tmp/lsfg_conf_tmp && mv /tmp/lsfg_conf_tmp "${CONFIG_FILE}"
+}
+
+# Read defaults from conf.toml
+if grep -qE "multiplier\s*=" "${CONFIG_FILE}"; then
+    MULTIPLIER=$(grep -E "multiplier\s*=" "${CONFIG_FILE}" | head -n1 | sed -E 's/.*=\s*([0-9]+).*/\1/')
+fi
+if grep -qE "flow_scale\s*=" "${CONFIG_FILE}"; then
+    FLOW_SCALE=$(grep -E "flow_scale\s*=" "${CONFIG_FILE}" | head -n1 | sed -E 's/.*=\s*([0-9.]+).*/\1/')
+fi
+if grep -qE "performance_mode\s*=\s*true" "${CONFIG_FILE}"; then
+    PERF_MODE="true"
+fi
+if grep -qE "hdr_mode\s*=\s*true" "${CONFIG_FILE}"; then
+    HDR_MODE="true"
+fi
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -m|--multiplier)
+            MULTIPLIER="$2"
+            update_game_field "multiplier" "$MULTIPLIER"
+            echo -e "\033[1;32m[lsfg]\033[0m Multiplier -> $MULTIPLIER"
+            shift 2
+            ;;
+        -f|--flow-scale)
+            FLOW_SCALE="$2"
+            update_game_field "flow_scale" "$FLOW_SCALE"
+            echo -e "\033[1;32m[lsfg]\033[0m Flow Scale -> $FLOW_SCALE"
+            FLOW_SET=1
+            shift 2
+            ;;
+        -p|--performance)
+            if [[ "$PERF_MODE" == "true" ]]; then
+                PERF_MODE="false"
+                update_game_field "performance_mode" "false"
+                echo -e "\033[1;32m[lsfg]\033[0m Performance Mode -> false"
+            else
+                PERF_MODE="true"
+                update_game_field "performance_mode" "true"
+                echo -e "\033[1;32m[lsfg]\033[0m Performance Mode -> true"
+            fi
+            PERF_SET=1
+            shift 1
+            ;;
+        -h|--hdr)
+            if [[ "$HDR_MODE" == "true" ]]; then
+                HDR_MODE="false"
+                update_game_field "hdr_mode" "false"
+                echo -e "\033[1;32m[lsfg]\033[0m HDR Mode -> false"
+            else
+                HDR_MODE="true"
+                update_game_field "hdr_mode" "true"
+                echo -e "\033[1;32m[lsfg]\033[0m HDR Mode -> true"
+            fi
+            shift 1
+            ;;
+        --dll)
+            LOSSLESS_DLL="$2"
+            sed -i -E "s|^dll\s*=.*|dll = \"${LOSSLESS_DLL}\"|g" "${CONFIG_FILE}"
+            echo -e "\033[1;32m[lsfg]\033[0m DLL Path -> ${LOSSLESS_DLL}"
+            shift 2
+            ;;
+        --help)
+            echo "Lossless Scaling Frame Generation Launcher (lsfg)"
+            echo "Usage: lsfg [options] <command> [args...]"
+            echo ""
+            echo "Options:"
+            echo "  -m, --multiplier 2|3|4    Target frame multiplier (e.g. 24fps -> 72fps with -m 3)"
+            echo "  -f, --flow-scale SCALE    Optical flow scale (0.5 = speed, 1.0 = quality)"
+            echo "  -p, --performance         Toggle lightweight performance mode"
+            echo "  -h, --hdr                 Toggle HDR interpolation mode"
+            echo "  --dll PATH                Specify custom path to Lossless.dll"
+            echo "  --help                    Show this message"
+            echo ""
+            echo "Examples:"
+            echo "  lsfg mpv video.mkv"
+            echo "  lsfg -m 3 -f 1.0 mpv movie.webm"
+            echo "  lsfg yt \"https://youtu.be/...\""
+            exit 0
+            ;;
+        -*)
+            echo "Unknown option: $1"
+            echo "Run 'lsfg --help' for usage."
+            exit 1
+            ;;
+        *)
+            break
+            ;;
+    esac
+done
+
+if [[ $# -eq 0 ]]; then
+    echo "Usage: lsfg [options] <command> [args...]"
+    echo "Run 'lsfg --help' for details."
+    exit 1
+fi
+
+if [[ -z "${LOSSLESS_DLL}" || ! -f "${LOSSLESS_DLL}" ]]; then
+    echo -e "\033[1;31m[lsfg] ERROR: Lossless.dll could not be located.\033[0m"
+    echo "Please specify it using --dll /path/to/Lossless.dll or edit ${CONFIG_FILE}"
+    exit 1
+fi
+
+# ── Environment & Layer Controls ──────────────────────────────────────────────
+# Suppress broken AUR v2 layer (which requires non-existent lsfg-vk.dll)
+export DISABLE_LSFGVK=1
+
+# Pass settings to lsfg-vk v1 Vulkan layer
+export LSFG_DLL_PATH="${LOSSLESS_DLL}"
+export LSFG_MULTIPLIER="${MULTIPLIER}"
+export LSFG_FLOW_SCALE="${FLOW_SCALE}"
+export LSFG_PERFORMANCE_MODE="${PERF_MODE}"
+export LSFG_HDR_MODE="${HDR_MODE}"
+
+# Hardware decoding preference (NVIDIA nvdec-copy / AMD vaapi-copy)
+HWDEC_FLAG="nvdec-copy"
+if command -v vainfo >/dev/null 2>&1 && ! command -v nvidia-smi >/dev/null 2>&1; then
+    HWDEC_FLAG="vaapi-copy"
+fi
+
+# ── Launch Target ─────────────────────────────────────────────────────────────
+if [[ "$1" == "yt" || "$1" == "youtube" ]]; then
+    shift
+    if [[ $PERF_SET -eq 0 ]]; then
+        sed -i -E "s/^([[:space:]]*performance_mode\s*=\s*)false/\1true/g" "${CONFIG_FILE}"
+        export LSFG_PERFORMANCE_MODE="true"
+    fi
+    if [[ $FLOW_SET -eq 0 ]]; then
+        sed -i -E "s/^([[:space:]]*flow_scale\s*=\s*)[0-9.]+/\10.5/g" "${CONFIG_FILE}"
+        export LSFG_FLOW_SCALE="0.5"
+    fi
+
+    exec mpv \
+        --vo=gpu-next \
+        --gpu-api=vulkan \
+        --hwdec="${HWDEC_FLAG}" \
+        --hwdec-codecs=all \
+        --interpolation=no \
+        --video-sync=audio \
+        --profile=lsfg \
+        --ytdl=yes \
+        --cache=yes \
+        --cache-secs=120 \
+        "$@"
+
+elif [[ "$1" == "mpv" ]]; then
+    shift
+    exec mpv \
+        --vo=gpu-next \
+        --gpu-api=vulkan \
+        --hwdec="${HWDEC_FLAG}" \
+        --hwdec-codecs=all \
+        --interpolation=no \
+        --video-sync=audio \
+        --profile=lsfg \
+        "$@"
+else
+    exec "$@"
+fi

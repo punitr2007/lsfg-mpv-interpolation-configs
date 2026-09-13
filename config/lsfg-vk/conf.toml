@@ -1,0 +1,29 @@
+# ==============================================================================
+# lsfg-vk Configuration (v1 Schema)
+# Location: ~/.config/lsfg-vk/conf.toml
+# ==============================================================================
+
+version = 1
+
+[global]
+# Path to official Lossless.dll extracted or located in your Steam installation
+dll = "/home/punit/.local/share/Steam/steamapps/common/Lossless Scaling/Lossless.dll"
+
+# Application Specific Configurations
+[[game]]
+exe = "mpv"
+
+# Frame rate multiplier (2 = 2x, 3 = 3x, 4 = 4x)
+# Example: 24 FPS video becomes 72 FPS with multiplier = 3
+multiplier = 3
+
+# Optical flow precision scale (0.5 to 1.0)
+# 1.0 = Highest visual quality & lowest artifacts (recommended for modern GPUs)
+# 0.5 = High performance / lower power draw
+flow_scale = 1.0
+
+# Performance Mode: Enables faster, lightweight interpolation pass
+performance_mode = false
+
+# HDR Mode: Enables 10-bit / HDR color space support
+hdr_mode = false

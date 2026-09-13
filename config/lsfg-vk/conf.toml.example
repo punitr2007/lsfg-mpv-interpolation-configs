@@ -1,0 +1,48 @@
+# ==============================================================================
+# lsfg-vk Example Configuration (Multi-Application / Multi-Game)
+# Location: ~/.config/lsfg-vk/conf.toml
+# ==============================================================================
+
+version = 1
+
+[global]
+# Absolute path to Lossless.dll from Steam Lossless Scaling
+# Linux Steam default: ~/.local/share/Steam/steamapps/common/Lossless Scaling/Lossless.dll
+dll = "/home/username/.local/share/Steam/steamapps/common/Lossless Scaling/Lossless.dll"
+
+# ------------------------------------------------------------------------------
+# 1. mpv Media Player (Optimized for 24fps -> 72fps / 60fps -> 120fps playback)
+# ------------------------------------------------------------------------------
+[[game]]
+exe = "mpv"
+multiplier = 3
+flow_scale = 1.0
+performance_mode = false
+hdr_mode = false
+
+# ------------------------------------------------------------------------------
+# 2. VLC Media Player
+# ------------------------------------------------------------------------------
+[[game]]
+exe = "vlc"
+multiplier = 2
+flow_scale = 0.75
+performance_mode = true
+hdr_mode = false
+
+# ------------------------------------------------------------------------------
+# 3. Native / Proton Games (e.g. Cyberpunk 2077, Elden Ring, RPCS3, Ryujinx)
+# ------------------------------------------------------------------------------
+[[game]]
+exe = "Cyberpunk2077.exe"
+multiplier = 2
+flow_scale = 1.0
+performance_mode = false
+hdr_mode = true
+
+[[game]]
+exe = "rpcs3"
+multiplier = 2
+flow_scale = 0.5
+performance_mode = true
+hdr_mode = false

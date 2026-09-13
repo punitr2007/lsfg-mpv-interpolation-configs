@@ -1,0 +1,9 @@
+# Binaries and compiled libraries
+*.so
+*.dll
+*.zip
+
+# Temp and logs
+/tmp/
+*.log
+.DS_Store
