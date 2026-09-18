@@ -7,9 +7,11 @@ version = 1
 
 [global]
 # Path to official Lossless.dll extracted or located in your Steam installation
-dll = "/home/punit/.local/share/Steam/steamapps/common/Lossless Scaling/Lossless.dll"
+# (e.g., ~/.local/share/Steam/steamapps/common/Lossless Scaling/Lossless.dll)
+dll = "/home/YOUR_USERNAME/.local/share/Steam/steamapps/common/Lossless Scaling/Lossless.dll"
 
 # Application Specific Configurations
+# IMPORTANT: Parameters MUST be inside [[game]] block for mpv
 [[game]]
 exe = "mpv"
 

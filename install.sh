@@ -31,6 +31,7 @@ CANDIDATE_DLLS=(
     "${HOME}/.local/share/Steam/steamapps/common/Lossless Scaling/Lossless.dll"
     "${HOME}/.steam/steam/steamapps/common/Lossless Scaling/Lossless.dll"
     "${HOME}/.steam/root/steamapps/common/Lossless Scaling/Lossless.dll"
+    "${HOME}/.var/app/com.valvesoftware.Steam/data/Steam/steamapps/common/Lossless Scaling/Lossless.dll"
     "/mnt/storage/SteamLibrary/steamapps/common/Lossless Scaling/Lossless.dll"
     "${HOME}/Local_Codebase/Projects/Lossless Scaling/Lossless.dll"
 )
@@ -66,9 +67,15 @@ elif [[ -f "${HOME}/Downloads/Lossless Scaling/bin/lsfg-vk_noui.zip" ]]; then
     cp -f /tmp/lsfg_extracted/lib/liblsfg-vk.so "${TARGET_LIB}"
     rm -rf /tmp/lsfg_extracted
     echo -e "  ${GREEN}✓ Installed liblsfg-vk.so into ~/.local/lib/${NC}"
+elif [[ -f "/usr/local/lib/liblsfg-vk.so" ]]; then
+    TARGET_LIB="/usr/local/lib/liblsfg-vk.so"
+    echo -e "  ${GREEN}✓ Found system layer at /usr/local/lib/liblsfg-vk.so${NC}"
+elif [[ -f "/usr/lib/liblsfg-vk.so" ]]; then
+    TARGET_LIB="/usr/lib/liblsfg-vk.so"
+    echo -e "  ${GREEN}✓ Found system layer at /usr/lib/liblsfg-vk.so${NC}"
 else
     echo -e "  ${YELLOW}! liblsfg-vk.so not found.${NC}"
-    echo -e "  Please ensure liblsfg-vk.so is placed in ${INSTALL_LIB}/"
+    echo -e "  Please ensure liblsfg-vk.so (v1 DXBC engine) is placed in ${INSTALL_LIB}/"
 fi
 
 # 4. Generate layer manifest
