@@ -1,48 +1,70 @@
 # ==============================================================================
-# lsfg-vk Example Configuration (Multi-Application / Multi-Game)
+# lsfg-vk Example Multi-Profile Configuration (v2 Schema)
 # Location: ~/.config/lsfg-vk/conf.toml
+# Documentation: https://lsfg-vk.dev
 # ==============================================================================
 
-version = 1
+version = 2
 
 [global]
-# Absolute path to Lossless.dll from Steam Lossless Scaling
-# Linux Steam default: ~/.local/share/Steam/steamapps/common/Lossless Scaling/Lossless.dll
-dll = "/home/username/.local/share/Steam/steamapps/common/Lossless Scaling/Lossless.dll"
+# Absolute path to lsfg-vk.dll (from Steam Lossless Scaling 'lsfg-vk' Beta branch)
+dll = "/home/username/.local/share/Steam/steamapps/common/Lossless Scaling/lsfg-vk.dll"
+allow_fp16 = true
+log_level = "info"
 
 # ------------------------------------------------------------------------------
-# 1. mpv Media Player (Optimized for 24fps -> 72fps / 60fps -> 120fps playback)
+# 1. mpv Media Player (Cinema 24fps -> 72fps / 60fps -> 120fps)
 # ------------------------------------------------------------------------------
-[[game]]
-exe = "mpv"
+[[profile]]
+name = "mpv"
+active_in = ["mpv"]
 multiplier = 3
 flow_scale = 1.0
 performance_mode = false
-hdr_mode = false
+pacing_mode = "vsync"
+override_present_mode = true
 
 # ------------------------------------------------------------------------------
-# 2. VLC Media Player
+# 2. VLC Media Player (Lightweight 2x Frame Generation)
 # ------------------------------------------------------------------------------
-[[game]]
-exe = "vlc"
+[[profile]]
+name = "vlc"
+active_in = ["vlc"]
 multiplier = 2
 flow_scale = 0.75
 performance_mode = true
-hdr_mode = false
+pacing_mode = "vsync"
+override_present_mode = true
 
 # ------------------------------------------------------------------------------
-# 3. Native / Proton Games (e.g. Cyberpunk 2077, Elden Ring, RPCS3, Ryujinx)
+# 3. Native & Proton/Wine Games (e.g. Cyberpunk 2077, Elden Ring, Genshin Impact)
 # ------------------------------------------------------------------------------
-[[game]]
-exe = "Cyberpunk2077.exe"
+[[profile]]
+name = "cyberpunk"
+active_in = ["Cyberpunk2077.exe"]
 multiplier = 2
 flow_scale = 1.0
 performance_mode = false
-hdr_mode = true
+pacing_mode = "vsync"
+override_present_mode = true
 
-[[game]]
-exe = "rpcs3"
+[[profile]]
+name = "eldenring"
+active_in = ["eldenring.exe"]
+multiplier = 2
+flow_scale = 1.0
+performance_mode = false
+pacing_mode = "vsync"
+override_present_mode = true
+
+# ------------------------------------------------------------------------------
+# 4. Console Emulators (RPCS3, Ryujinx, RPCS3 30fps -> 60fps / 60fps -> 120fps)
+# ------------------------------------------------------------------------------
+[[profile]]
+name = "rpcs3"
+active_in = ["rpcs3"]
 multiplier = 2
 flow_scale = 0.5
 performance_mode = true
-hdr_mode = false
+pacing_mode = "vsync"
+override_present_mode = true

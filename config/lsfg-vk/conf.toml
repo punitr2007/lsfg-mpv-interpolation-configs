@@ -1,31 +1,51 @@
 # ==============================================================================
-# lsfg-vk Configuration (v1 Schema)
+# lsfg-vk Configuration (v2 Schema)
 # Location: ~/.config/lsfg-vk/conf.toml
+# Documentation: https://lsfg-vk.dev
 # ==============================================================================
 
-version = 1
+version = 2
 
 [global]
-# Path to official Lossless.dll extracted or located in your Steam installation
-# (e.g., ~/.local/share/Steam/steamapps/common/Lossless Scaling/Lossless.dll)
-dll = "/home/YOUR_USERNAME/.local/share/Steam/steamapps/common/Lossless Scaling/Lossless.dll"
+# Path to lsfg-vk.dll or Lossless.dll
+# NOTE: For modern v2 layer, switch Lossless Scaling to the 'lsfg-vk' Beta branch
+# in Steam (Properties -> Betas -> select 'lsfg-vk') to obtain lsfg-vk.dll.
+# If omitted or left as default, lsfg-vk auto-discovers it in Steam libraries.
+dll = "/home/YOUR_USERNAME/.local/share/Steam/steamapps/common/Lossless Scaling/lsfg-vk.dll"
 
-# Application Specific Configurations
-# IMPORTANT: Parameters MUST be inside [[game]] block for mpv
-[[game]]
-exe = "mpv"
+# Allow half-precision (FP16) compute shaders on supported GPUs (RTX, RDNA, etc.)
+# Reduces VRAM bandwidth and latency without perceptible quality loss.
+allow_fp16 = true
+
+# Logging level: "debug", "info", "warning", "error"
+log_level = "info"
+
+# Optional: Log file path (omit or comment out to log to stdout/stderr)
+# log_file = "/tmp/lsfg-vk.log"
+
+# ==============================================================================
+# Application Profiles
+# ==============================================================================
+
+[[profile]]
+name = "mpv"
+# Process name or executable filename to match (matched from /proc/self/exe or /proc/self/comm)
+active_in = ["mpv"]
 
 # Frame rate multiplier (2 = 2x, 3 = 3x, 4 = 4x)
 # Example: 24 FPS video becomes 72 FPS with multiplier = 3
 multiplier = 3
 
-# Optical flow precision scale (0.5 to 1.0)
-# 1.0 = Highest visual quality & lowest artifacts (recommended for modern GPUs)
-# 0.5 = High performance / lower power draw
+# Optical flow precision scale (0.25 to 1.0)
+# 1.0 = Maximum optical flow resolution & sharpest edge vectors (recommended)
+# 0.5 = High performance / lower GPU power draw
 flow_scale = 1.0
 
-# Performance Mode: Enables faster, lightweight interpolation pass
+# Performance Mode: Enables lightweight compute shaders to conserve GPU power
 performance_mode = false
 
-# HDR Mode: Enables 10-bit / HDR color space support
-hdr_mode = false
+# Method of frame pacing/insertion: "vsync"
+pacing_mode = "vsync"
+
+# When using "vsync" pacing mode, override swapchain presentation to FIFO (VSync)
+override_present_mode = true

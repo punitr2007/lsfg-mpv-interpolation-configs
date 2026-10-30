@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🎬 Lossless Scaling Frame Generation (lsfg-vk) for mpv on Linux
+# 🎬 Lossless Scaling Frame Generation (lsfg-vk v2) for mpv on Linux
 
 <p align="center">
   <strong>Transform 24 FPS movies and 30/60 FPS videos into silky-smooth 72 FPS / 96 FPS / 120+ FPS playback on Linux using native Vulkan swapchain frame generation.</strong>
@@ -31,7 +31,7 @@
     </td>
     <td width="50%">
       <h3>⚡ Native Vulkan Swapchain Hook</h3>
-      <p>Injects interpolated frames directly at the <code>vkQueuePresentKHR</code> layer — no Wine emulation or DirectX overhead.</p>
+      <p>Direct <code>vkQueuePresentKHR</code> interception with Vulkan compute pipelines. No Wine/Proton virtualization overhead.</p>
     </td>
   </tr>
   <tr>
@@ -40,8 +40,8 @@
       <p>Built-in streaming integration with optimal cache buffering: simply run <code>lsfg yt "URL"</code>.</p>
     </td>
     <td width="50%">
-      <h3>🎛️ Dynamic CLI Controls</h3>
-      <p>Adjust multiplier (<code>-m 3</code>), optical flow quality (<code>-f 1.0</code>), performance mode (<code>-p</code>), and HDR (<code>-h</code>) on the fly.</p>
+      <h3>🎛️ Modern v2 Architecture</h3>
+      <p>Full support for the modern <code>lsfg-vk</code> v2 engine, profile-based configuration, FP16 compute shaders, and automated layer management.</p>
     </td>
   </tr>
 </table>
@@ -51,15 +51,25 @@
 ## ⚡ Quick Start
 
 ### 1. Prerequisites
-Ensure you have **Lossless Scaling** installed on Steam, along with `mpv` and Vulkan tools:
-```bash
-# Arch Linux:
-sudo pacman -S mpv vulkan-tools yt-dlp
-```
+
+1. **Install required packages** (Arch Linux / CachyOS):
+   ```bash
+   sudo pacman -S mpv vulkan-tools yt-dlp
+   yay -S lsfg-vk-git   # or paru -S lsfg-vk-git
+   ```
+
+2. **Steam Lossless Scaling Beta Branch**:
+   To obtain the native Vulkan shader library (`lsfg-vk.dll`):
+   - Open your **Steam Library**.
+   - Right-click **Lossless Scaling** → **Properties...**
+   - Go to **Betas** (or *Game Versions & Betas*).
+   - Select the **`lsfg-vk`** beta branch from the dropdown menu.
+   - Let Steam download the files. This places `lsfg-vk.dll` in your Steam directory.
 
 ### 2. Automated 1-Click Setup
+
 ```bash
-# Clone and enter the repository
+# Clone this repository
 git clone git@github.com:punitr2007/lsfg-mpv-interpolation-configs.git
 cd lsfg-mpv-interpolation-configs
 
@@ -67,9 +77,25 @@ cd lsfg-mpv-interpolation-configs
 ./install.sh
 ```
 
-### 3. Enjoy Silky-Smooth 72 FPS Playback!
+The installer will:
+- Check for `mpv` and the `lsfg-vk` Vulkan layer.
+- Auto-detect `lsfg-vk.dll` from your Steam installation.
+- Deactivate obsolete v1 implicit layers to prevent loader collisions.
+- Generate a clean `~/.config/lsfg-vk/conf.toml` (v2 schema).
+- Install the `lsfg` launcher to `~/.local/bin/lsfg`.
+- Configure `~/.config/mpv/mpv.conf` with the optimal `[lsfg]` profile.
+
+### 3. Enjoy Silky-Smooth Playback!
+
 ```bash
+# 24 FPS Cinema -> 72 FPS on 120Hz/144Hz screens:
 lsfg -m 3 -f 1.0 mpv /path/to/movie.mkv
+
+# 24 FPS Anime -> 96 FPS on 144Hz/240Hz screens:
+lsfg -m 4 -f 1.0 mpv anime.mkv
+
+# Stream YouTube with 3x frame interpolation:
+lsfg yt "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
 ```
 
 ---
@@ -85,7 +111,7 @@ lsfg [options] <command> [args...]
 ### 🎯 Presets & Common Workflows
 
 ```bash
-# 🍿 1. Cinematic 3x Interpolation (24 FPS -> 72 FPS at full quality)
+# 🍿 1. Cinematic 3x Interpolation (24 FPS -> 72 FPS at maximum quality)
 lsfg -m 3 -f 1.0 mpv movie.mkv
 
 # ⚡ 2. High-Refresh 4x Interpolation (24 FPS -> 96 FPS for 144Hz+ displays)
@@ -94,54 +120,71 @@ lsfg -m 4 -f 1.0 mpv anime.webm
 # 📺 3. YouTube Stream Interpolation (Auto buffer & performance tuning)
 lsfg yt "https://www.youtube.com/watch?v=..."
 
-# 🔋 4. Low-Power / Battery Saver Mode (Lightweight flow pass)
+# 🔋 4. Low-Power / Battery Saver Mode (Lightweight flow pass for laptops)
 lsfg -m 2 -f 0.5 -p mpv video.mkv
 
-# 🌈 5. 10-bit HDR Wide Color Gamut Playback
-lsfg -m 3 -h mpv 4k_hdr_movie.mkv
+# 🐞 5. Verbose Debug Mode (Print layer diagnostics and shader loads)
+lsfg -d mpv video.mkv
 ```
 
 ### 📋 CLI Flags Reference
 
 | Flag | Parameter | Values | Default | Description |
 | :--- | :--- | :--- | :--- | :--- |
-| **`-m, --multiplier`** | `multiplier` | `2`, `3`, `4` | `3` | Frame generation factor (e.g. $24 \times 3 = 72$ FPS) |
-| **`-f, --flow-scale`** | `flow_scale` | `0.5` – `1.0` | `1.0` | Optical flow vector resolution ($1.0$ = highest fidelity) |
+| **`-m, --multiplier`** | `multiplier` | `2`, `3`, `4` | `3` | Target frame multiplication factor (e.g. $24 \times 3 = 72$ FPS) |
+| **`-f, --flow-scale`** | `flow_scale` | `0.25` – `1.0` | `1.0` | Optical flow vector resolution ($1.0$ = highest fidelity) |
 | **`-p, --performance`** | `performance_mode` | toggle | `false` | Enables lightweight compute shaders to conserve GPU power |
-| **`-h, --hdr`** | `hdr_mode` | toggle | `false` | Enables 10-bit HDR color processing pipeline |
-| **`--dll`** | `dll` | `/path/...` | *Steam default* | Custom path to `Lossless.dll` |
+| **`--pacing`** | `pacing_mode` | `vsync` | `vsync` | Frame pacing and insertion method |
+| **`--dll`** | `dll` | `/path/...` | *Steam default* | Custom path to `lsfg-vk.dll` or `Lossless.dll` |
+| **`-d, --debug`** | `log_level` | toggle | `info` | Enables verbose debug output (`LSFGVK_LOG_LEVEL=debug`) |
 | **`--help`** | | | | Display quick command-line reference |
 
 ---
 
 ## ⚙️ Configuration
 
-### 📄 `~/.config/lsfg-vk/conf.toml`
+### 📄 `~/.config/lsfg-vk/conf.toml` (v2 Schema)
 
 ```toml
-version = 1
+version = 2
 
 [global]
-dll = "/home/username/.local/share/Steam/steamapps/common/Lossless Scaling/Lossless.dll"
+# Path to lsfg-vk.dll from Steam Beta branch 'lsfg-vk'
+dll = "/home/username/.local/share/Steam/steamapps/common/Lossless Scaling/lsfg-vk.dll"
 
-# Application Section for mpv
-[[game]]
-exe = "mpv"
+# Half-precision FP16 acceleration for modern GPUs (RTX, RDNA)
+allow_fp16 = true
 
+# Log level: "debug", "info", "warning", "error"
+log_level = "info"
+
+# Application Profile for mpv
+[[profile]]
+name = "mpv"
+active_in = ["mpv"]
+
+# Frame rate multiplier (2x, 3x, 4x)
 multiplier = 3
+
+# Optical flow precision scale (0.25 to 1.0)
 flow_scale = 1.0
+
+# Lightweight shader execution mode
 performance_mode = false
-hdr_mode = false
+
+# Presentation pacing and VSync override
+pacing_mode = "vsync"
+override_present_mode = true
 ```
 
 > [!IMPORTANT]
-> In **v1** configurations, application rules **must** be enclosed within a `[[game]]` block specifying `exe = "mpv"`. Placing parameters directly under `[global]` causes the layer to silently skip frame interpolation.
+> The modern `lsfg-vk` v2 engine strictly requires `version = 2` and profile blocks defined with `[[profile]]` and `active_in = ["mpv"]`. Older v1 syntax (`[[game]] exe = "mpv"`) will trigger syntax errors. The `lsfg` launcher and installer automatically ensure the v2 schema is used.
 
 ---
 
 ### 🎛️ `~/.config/mpv/mpv.conf` (Profile `[lsfg]`)
 
-The installer automatically configures or appends the `[lsfg]` profile:
+The installer automatically adds the `[lsfg]` profile to your mpv configuration:
 
 ```ini
 [lsfg]
@@ -154,8 +197,8 @@ video-sync=audio
 ```
 
 > [!TIP]
-> - `hwdec=nvdec-copy` (or `vaapi-copy` on AMD/Intel) prevents device context lockups between CUDA and Vulkan.
-> - `interpolation=no` ensures mpv's internal display-resample filter doesn't collide with the Vulkan frame generation layer.
+> - `hwdec=nvdec-copy` (or `vaapi-copy` on AMD/Intel) prevents GPU device context deadlocks between hardware video decoders and the Vulkan swapchain.
+> - `interpolation=no` ensures mpv's internal software resampler does not interfere with the Vulkan swapchain frame generation layer.
 
 ---
 
@@ -166,36 +209,50 @@ flowchart TD
     A["🎬 Video Source (24 FPS)"] --> B["⚡ mpv Player (vo=gpu-next, gpu-api=vulkan)"]
     B --> C["📦 Hardware Decoder (nvdec-copy / vaapi-copy)"]
     C --> D["🎯 vkQueuePresentKHR Hook"]
-    D --> E["⚙️ lsfg-vk Implicit Vulkan Layer"]
-    subgraph LayerEngine ["lsfg-vk Processing"]
-        E --> F["DXBC → SPIR-V Shader Translator"]
-        F --> G["Optical Flow Motion Estimator"]
-        G --> H["Synthetic Intermediate Frames (2x / 3x / 4x)"]
+    D --> E["⚙️ lsfg-vk v2 Vulkan Layer (VK_LAYER_LSFGVK_frame_generation)"]
+    subgraph LayerEngine ["lsfg-vk v2 Processing Pipeline"]
+        E --> F["Timeline Semaphore Synchronization"]
+        F --> G["Optical Flow Motion Estimation Shader"]
+        G --> H["Synthetic Frame Synthesis (2x / 3x / 4x)"]
     end
     H --> I["🖥️ Display Server (Wayland / X11 Compositor)"]
     I --> J["✨ Silky Smooth Output (72 / 96 / 120+ FPS)"]
 ```
 
-For full details, read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+For full architectural details, read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ---
 
 ## 🛠️ Troubleshooting
 
 <details>
-<summary><b>🔍 1. Why does mpv OSD or MangoHud still say 24 FPS?</b></summary>
+<summary><b>🔍 1. Why does mpv OSD or MangoHud still show 24 FPS?</b></summary>
 <br>
-MangoHud and mpv's stats measure the <b>upstream decoder rate</b> before Vulkan presentation. The <code>lsfg-vk</code> layer intercepts the presentation queue <i>after</i> mpv renders each frame and injects intermediate frames into the swapchain at 72 FPS. You can observe the interpolation directly in video smoothness.
+mpv's OSD (and stats overlays like MangoHud placed upstream in the loader chain) measure the <b>upstream decoder clock</b> before Vulkan presentation. The <code>lsfg-vk</code> layer intercepts the presentation queue (<code>vkQueuePresentKHR</code>) <i>after</i> mpv submits each frame and injects synthetic intermediate frames into the swapchain at 72 FPS or 96 FPS. You can observe the interpolation directly in video smoothness, or run with <code>lsfg -d mpv ...</code> to inspect the layer output logs.
 </details>
 
 <details>
-<summary><b>⚠️ 2. Error: <code>Unsupported configuration version (must be 2)</code>?</b></summary>
+<summary><b>⚠️ 2. Error: <code>Unable to find base shader 'mipmaps' in DLL</code>?</b></summary>
 <br>
-The experimental v2 layer requires an unreleased <code>lsfg-vk.dll</code>. The <code>lsfg</code> launcher script automatically disables v2 with <code>DISABLE_LSFGVK=1</code> and routes rendering through the stable v1 DXBC engine.
+This indicates that the layer is reading the Windows Direct3D <code>Lossless.dll</code> instead of the native Vulkan <code>lsfg-vk.dll</code>.
+<br><br>
+<b>Fix</b>: Switch to the <b><code>lsfg-vk</code></b> beta branch in Steam:
+<ol>
+  <li>Open Steam → Right-click <b>Lossless Scaling</b> → <b>Properties...</b></li>
+  <li>Go to the <b>Betas</b> tab.</li>
+  <li>Select <b><code>lsfg-vk</code></b> in the dropdown.</li>
+  <li>Steam will download <code>lsfg-vk.dll</code>.</li>
+</ol>
 </details>
 
 <details>
-<summary><b>💥 3. Black screen or crash on startup with NVIDIA?</b></summary>
+<summary><b>⚠️ 3. Error: <code>Unsupported configuration version (must be 2)</code>?</b></summary>
+<br>
+Your <code>~/.config/lsfg-vk/conf.toml</code> is using the deprecated v1 format. Re-run <code>./install.sh</code> or replace the file with the provided <code>config/lsfg-vk/conf.toml</code>.
+</details>
+
+<details>
+<summary><b>💥 4. Black screen or crash on startup with NVIDIA?</b></summary>
 <br>
 Ensure your <code>mpv.conf</code> uses copy-back hardware decoding (<code>hwdec=nvdec-copy</code>) rather than direct CUDA headless decoding. Direct CUDA handles can cause device resource race conditions with Vulkan swapchains.
 </details>
@@ -209,17 +266,18 @@ For more in-depth solutions, check out [docs/TROUBLESHOOTING.md](docs/TROUBLESHO
 ```
 lsfg-mpv-interpolation-configs/
 ├── bin/
-│   └── lsfg                               # Universal launcher script
+│   └── lsfg                               # Universal launcher script (v2 engine)
 ├── config/
 │   ├── lsfg-vk/
-│   │   ├── conf.toml                      # v1 config with [[game]] mpv section
+│   │   ├── conf.toml                      # v2 config template with mpv profile
 │   │   └── conf.toml.example              # Multi-game / multi-app config template
 │   ├── mpv/
 │   │   ├── mpv.conf                       # Complete mpv config with [lsfg] profile
 │   │   └── profiles/
 │   │       └── lsfg.conf                  # Modular include-able profile snippet
 │   └── vulkan/
-│       └── VkLayer_LS_frame_generation.json # Vulkan layer manifest template
+│       ├── VkLayer_LSFGVK_frame_generation.json # Modern v2 Vulkan layer manifest
+│       └── VkLayer_LS_frame_generation.json     # Legacy v1 Vulkan layer manifest
 ├── docs/
 │   ├── ARCHITECTURE.md                    # Technical deep dive into layer hooking
 │   ├── BENCHMARKS_AND_PRESETS.md          # Multiplier & performance presets
@@ -234,4 +292,4 @@ lsfg-mpv-interpolation-configs/
 ## 📜 License & Credits
 
 - Distributed under the **MIT License**. See [LICENSE](LICENSE) for more information.
-- Created for the Linux media & gaming community. Powered by **[Lossless Scaling](https://store.steampowered.com/app/993090/Lossless_Scaling/)** and **`lsfg-vk`**.
+- Created for the Linux media & gaming community. Powered by **[Lossless Scaling](https://store.steampowered.com/app/993090/Lossless_Scaling/)** and **[`lsfg-vk`](https://lsfg-vk.dev)**.
